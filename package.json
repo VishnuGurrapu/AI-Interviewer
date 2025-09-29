@@ -1,0 +1,28 @@
+{
+  "name": "ai-interview-assistant",
+  "version": "1.0.0",
+  "description": "Full-stack AI-powered interview assistant with resume parsing",
+  "type": "module",
+  "scripts": {
+    "setup": "node start.js",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "seed": "cd backend && npm run seed",
+    "test-api": "cd backend && npm run test-api",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": [
+    "ai",
+    "interview",
+    "resume",
+    "mern",
+    "react",
+    "node",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

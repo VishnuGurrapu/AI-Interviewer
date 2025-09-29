@@ -5,8 +5,21 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",
+    "dev-safe": "nodemon index-safe.js",
     "start": "node index.js",
+    "start-safe": "node index-safe.js",
     "seed": "node seedData.js",
+    "test-api": "node test-api.js",
+    "test-ai": "node test-ai.js",
+    "test-basic": "node test-basic.js",
+    "test-pdf": "node test-pdf.js",
+    "fix-pdf": "node fix-pdf.js",
+    "test-parsing": "node test-resume-parsing.js",
+    "test-names": "node test-name-extraction.js",
+    "test-real-pdf": "node test-real-pdf.js",
+    "test-robust": "node -e \"import('./utils/robustPdfParser.js').then(m => m.robustExtractResumeData('./uploads/resumes/resume-latest.pdf').then(console.log).catch(console.error))\"",
+    "cleanup-db": "node cleanup-database.js",
+    "check": "node check-setup.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -18,7 +31,10 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
-    "mongoose": "^8.18.2"
+    "mongoose": "^8.18.2",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.104.0",
+    "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

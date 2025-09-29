@@ -102,6 +102,11 @@ const interviewSlice = createSlice({
         state.aiSummary = 'Great interview! You demonstrated strong communication skills and technical knowledge.';
       }
     },
+    completeInterview: (state, action: PayloadAction<{ score: number; aiSummary: string }>) => {
+      state.isInterviewActive = false;
+      state.finalScore = action.payload.score;
+      state.aiSummary = action.payload.aiSummary;
+    },
     updateTimeRemaining: (state, action: PayloadAction<number>) => {
       state.timeRemaining = action.payload;
       if (state.timeRemaining <= 0 && state.isInterviewActive) {
@@ -132,9 +137,10 @@ export const {
   startInfoCollection,
   startInterview,
   nextQuestion,
+  completeInterview,
   updateTimeRemaining,
   resetInterview,
-  setWelcomeBack,
+  setWelcomeBack
 } = interviewSlice.actions;
 
 export default interviewSlice.reducer;

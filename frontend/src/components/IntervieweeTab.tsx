@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Send, Clock, FileText } from 'lucide-react';
+import { Upload, Send, Clock, FileText, AlertCircle, ArrowLeft } from 'lucide-react';
 import { 
   startInfoCollection, 
   addChatMessage, 
   startInterview, 
-  setCurrentCandidate 
+  setCurrentCandidate,
+  resetInterview,
+  completeInterview
 } from '@/store/slices/interviewSlice';
+import { resumeAPI, candidateAPI, interviewAPI, aiAPI, interviewResultAPI } from '@/services/api';
 import ChatInterface from './ChatInterface';
 import ResumeUpload from './ResumeUpload';
 import TimerRing from './TimerRing';
@@ -33,47 +36,202 @@ const IntervieweeTab: React.FC = () => {
   } = useSelector((state: RootState) => state.interview);
 
   const [candidateInfo, setCandidateInfo] = useState({
-    name: '',
-    email: '',
-    phone: ''
+    name: 'Unknown Candidate',
+    email: `candidate${Date.now()}@example.com`,
+    phone: 'Not provided'
   });
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [currentCandidateId, setCurrentCandidateId] = useState<string | null>(null);
 
-  const handleResumeUpload = (file: File) => {
-    // Simulate resume parsing
-    const extractedInfo = {
-      name: 'John Doe', // Simulated extraction
-      email: 'john.doe@email.com',
-      phone: '+1 (555) 123-4567'
-    };
+  const handleGoBack = () => {
+    // Reset all states to go back to upload stage
+    setCandidateInfo({
+      name: 'Unknown Candidate',
+      email: `candidate${Date.now()}@example.com`,
+      phone: 'Not provided'
+    });
+    setCurrentCandidateId(null);
+    setUploadError(null);
     
-    setCandidateInfo(extractedInfo);
+    // Reset interview state completely
+    dispatch(resetInterview());
     
-    dispatch(setCurrentCandidate({
-      id: Date.now().toString(),
-      ...extractedInfo,
-      resumeFile: file,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    }));
-
+    // Start fresh with welcome message
     dispatch(startInfoCollection());
   };
 
-  const handleStartInterview = () => {
-    if (candidateInfo.name && candidateInfo.email && candidateInfo.phone) {
-      dispatch(addChatMessage({
-        text: `Great! Let's begin the interview. You'll have ${questions.length} questions to answer. Good luck!`,
-        sender: 'bot'
-      }));
+  const handleResumeUpload = async (file: File) => {
+    setIsUploading(true);
+    setUploadError(null);
+    
+    try {
+      // Upload resume to backend
+      const response = await resumeAPI.upload(file);
       
-      setTimeout(() => {
-        dispatch(addChatMessage({
-          text: questions[0].text,
-          sender: 'bot',
-          questionId: questions[0].id
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      if (response.data) {
+        const { candidate, extractedData } = response.data;
+        
+        const extractedInfo = {
+          name: extractedData.name || 'Unknown Candidate',
+          email: extractedData.email || `candidate${Date.now()}@example.com`,
+          phone: extractedData.phone || 'Not provided'
+        };
+        
+        console.log('[Frontend] Setting candidate info:', extractedInfo);
+        setCandidateInfo(extractedInfo);
+        setCurrentCandidateId(candidate._id || null);
+        
+        // Check if parsing was successful
+        const hasValidName = extractedData.name && extractedData.name !== 'Unknown Candidate';
+        const hasValidEmail = extractedData.email && !extractedData.email.includes('candidate') && !extractedData.email.includes('@example.com');
+        const hasValidPhone = extractedData.phone && extractedData.phone !== 'Not provided';
+        
+        dispatch(setCurrentCandidate({
+          ...candidate,
+          id: candidate._id || '',
+          createdAt: candidate.createdAt || new Date().toISOString()
         }));
-        dispatch(startInterview());
-      }, 1500);
+        
+        // Provide feedback based on parsing success
+        if (hasValidName && hasValidEmail && hasValidPhone) {
+          dispatch(addChatMessage({
+            text: `Excellent! I've successfully parsed your resume and extracted all your information.`,
+            sender: 'bot'
+          }));
+          
+          dispatch(addChatMessage({
+            text: `I found: Name: ${extractedData.name}, Email: ${extractedData.email}, Phone: ${extractedData.phone}. Is this information correct?`,
+            sender: 'bot'
+          }));
+        } else if (hasValidName || hasValidEmail || hasValidPhone) {
+          dispatch(addChatMessage({
+            text: `Great! I've parsed your resume and extracted some information. Let me verify and collect any missing details.`,
+            sender: 'bot'
+          }));
+          
+          const foundInfo = [];
+          if (hasValidName) foundInfo.push(`Name: ${extractedData.name}`);
+          if (hasValidEmail) foundInfo.push(`Email: ${extractedData.email}`);
+          if (hasValidPhone) foundInfo.push(`Phone: ${extractedData.phone}`);
+          
+          if (foundInfo.length > 0) {
+            dispatch(addChatMessage({
+              text: `I found: ${foundInfo.join(', ')}. Let me collect the missing information.`,
+              sender: 'bot'
+            }));
+          }
+          
+          // Start collecting missing information
+          if (!hasValidName) {
+            dispatch(addChatMessage({
+              text: `I couldn't extract your name from the resume. Could you please tell me your full name?`,
+              sender: 'bot'
+            }));
+          } else if (!hasValidEmail) {
+            dispatch(addChatMessage({
+              text: `I couldn't find your email address. Could you please provide your email?`,
+              sender: 'bot'
+            }));
+          } else if (!hasValidPhone) {
+            dispatch(addChatMessage({
+              text: `I couldn't find your phone number. Could you please provide your phone number?`,
+              sender: 'bot'
+            }));
+          }
+        } else {
+          dispatch(addChatMessage({
+            text: `I've received your resume, but I had trouble extracting your personal information. Let me collect your details manually.`,
+            sender: 'bot'
+          }));
+          
+          dispatch(addChatMessage({
+            text: `Let's start with your full name. What should I call you?`,
+            sender: 'bot'
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Resume upload failed:', error);
+      setUploadError(error instanceof Error ? error.message : 'Upload failed');
+      
+      dispatch(addChatMessage({
+        text: `I'm sorry, there was an error processing your resume. Please try uploading again or enter your information manually.`,
+        sender: 'bot'
+  const handleStartInterview = async () => {
+    if (candidateInfo.name && candidateInfo.email && candidateInfo.phone && currentCandidateId) {
+      try {
+        dispatch(addChatMessage({
+          text: `Perfect! Let me generate personalized interview questions based on your resume. This will take just a moment...`,
+          sender: 'bot'
+        }));
+
+        // Generate AI-powered questions based on resume
+        const questionsResponse = await aiAPI.generateQuestions(currentCandidateId, 'Software Developer');
+        
+        let aiQuestions = questions; // fallback to default questions
+        
+        if (questionsResponse.data && questionsResponse.data.questions) {
+          // Convert AI questions to frontend format
+          aiQuestions = questionsResponse.data.questions.map((q, index) => ({
+            id: q.id || (index + 1).toString(),
+            text: q.text,
+            difficulty: q.difficulty as 'easy' | 'medium' | 'hard',
+            timeLimit: q.timeLimit
+          }));
+          console.log('✅ Generated AI questions:', aiQuestions);
+          
+          dispatch(addChatMessage({
+            text: `Excellent! I've generated ${aiQuestions.length} personalized questions based on your background and skills.`,
+            sender: 'bot'
+          }));
+        } else {
+          console.log('⚠️ Using default questions as fallback');
+          dispatch(addChatMessage({
+            text: `I'll use our standard interview questions for you today.`,
+            sender: 'bot'
+          }));
+        }
+
+        // Create interview in backend with generated questions
+        const interviewResponse = await interviewAPI.create({
+          candidateId: currentCandidateId,
+          questions: aiQuestions.map(q => ({
+            text: q.text,
+            difficulty: q.difficulty,
+            timeLimit: q.timeLimit
+          }))
+        });
+        
+        if (interviewResponse.error) {
+          throw new Error(interviewResponse.error);
+        }
+        
+        dispatch(addChatMessage({
+          text: `Great! Let's begin the interview. You'll have ${aiQuestions.length} questions to answer. Good luck!`,
+          sender: 'bot'
+        }));
+        
+        setTimeout(() => {
+          dispatch(addChatMessage({
+            text: aiQuestions[0].text,
+            sender: 'bot',
+            questionId: aiQuestions[0].id
+          }));
+          dispatch(startInterview());
+        }, 2000);
+        
+      } catch (error) {
+        console.error('Failed to start interview:', error);
+        dispatch(addChatMessage({
+          text: `I'm sorry, there was an error starting the interview. Please try again.`,
+          sender: 'bot'
+        }));
+      }
     }
   };
 
@@ -117,7 +275,7 @@ const IntervieweeTab: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Chat Area */}
         <div className="lg:col-span-2">
-          <Card className="h-[600px] flex flex-col">
+          <Card className="h-[600px] flex flex-col overflow-hidden">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2">
                 <motion.div
@@ -126,7 +284,7 @@ const IntervieweeTab: React.FC = () => {
                 >
                   <FileText className="w-5 h-5 text-primary" />
                 </motion.div>
-                Interview Chat
+                <span>Interview Chat</span>
                 {isInterviewActive && (
                   <Badge className="bg-success text-success-foreground">
                     Live
@@ -134,22 +292,39 @@ const IntervieweeTab: React.FC = () => {
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 p-0">
+            <CardContent className="flex-1 p-0 min-h-0">
               {!currentCandidate ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="flex flex-col items-center justify-center h-full p-8 text-center"
-                >
-                  <Upload className="w-16 h-16 text-muted-foreground mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Upload Your Resume</h3>
-                  <p className="text-muted-foreground mb-6">
-                    Start by uploading your resume to begin the interview process
-                  </p>
-                  <ResumeUpload onUpload={handleResumeUpload} />
+                  className="flex flex-col items-center justify-center h-full p-8 text-center">
+                  {isUploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mb-4"></div>
+                      <h3 className="text-xl font-semibold mb-2">Processing Resume</h3>
+                      <p className="text-muted-foreground mb-6">
+                        Please wait while we extract information from your resume...
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-16 h-16 text-muted-foreground mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">Upload Your Resume</h3>
+                      <p className="text-muted-foreground mb-6">
+                        Start by uploading your resume to begin the interview process
+                      </p>
+                      {uploadError && (
+                        <div className="flex items-center gap-2 text-destructive mb-4 p-3 bg-destructive/10 rounded-lg">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-sm">{uploadError}</span>
+                        </div>
+                      )}
+                      <ResumeUpload onUpload={handleResumeUpload} disabled={isUploading} />
+                    </>
+                  )}
                 </motion.div>
               ) : (
-                <ChatInterface onStartInterview={handleStartInterview} />
+                <ChatInterface onStartInterview={handleStartInterview} onGoBack={handleGoBack} />
               )}
             </CardContent>
           </Card>
@@ -194,13 +369,23 @@ const IntervieweeTab: React.FC = () => {
                     <p className="font-medium">{candidateInfo.phone}</p>
                   </div>
                   {!isInterviewActive && !isCollectingInfo && (
-                    <Button 
-                      onClick={handleStartInterview}
-                      className="w-full mt-4"
-                      variant="gradient"
-                    >
-                      Start Interview
-                    </Button>
+                    <div className="space-y-2 mt-4">
+                      <Button 
+                        onClick={handleStartInterview}
+                        className="w-full"
+                        variant="gradient"
+                      >
+                        Start Interview
+                      </Button>
+                      <Button 
+                        onClick={handleGoBack}
+                        className="w-full"
+                        variant="outline"
+                      >
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Upload New Resume
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -229,9 +414,18 @@ const IntervieweeTab: React.FC = () => {
                   >
                     {questions[currentQuestionIndex]?.difficulty?.toUpperCase()}
                   </Badge>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mb-4">
                     {questions[currentQuestionIndex]?.text}
                   </p>
+                  <Button 
+                    onClick={handleGoBack}
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Restart Interview
+                  </Button>
                 </CardContent>
               </Card>
             </motion.div>

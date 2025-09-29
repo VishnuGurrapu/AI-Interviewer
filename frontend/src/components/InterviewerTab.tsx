@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
+import { interviewResultAPI } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,8 +23,45 @@ import CandidateDetails from './CandidateDetails';
 const InterviewerTab: React.FC = () => {
   const { candidates, searchTerm } = useSelector((state: RootState) => state.candidates);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [completedInterviews, setCompletedInterviews] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalCandidates: 0,
+    completedInterviews: 0,
+    inProgressInterviews: 0,
+    pendingInterviews: 0,
+    averageScore: 0
+  });
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for demo purposes
+  // Fetch real data from backend
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch completed interviews
+        const interviewsResponse = await interviewResultAPI.getCompletedInterviews();
+        if (interviewsResponse.data) {
+          setCompletedInterviews(interviewsResponse.data);
+        }
+        
+        // Fetch statistics
+        const statsResponse = await interviewResultAPI.getStats();
+        if (statsResponse.data) {
+          setStats(statsResponse.data);
+        }
+        
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Mock data for demo purposes (fallback)
   const mockCandidates = [
     {
       id: '1',
@@ -71,7 +109,8 @@ const InterviewerTab: React.FC = () => {
     }
   ];
 
-  const allCandidates = [...candidates, ...mockCandidates];
+  // Use real data if available, otherwise fallback to mock data
+  const allCandidates = completedInterviews.length > 0 ? completedInterviews : [...candidates, ...mockCandidates];
   const selectedCandidate = allCandidates.find(c => c.id === selectedCandidateId);
 
   const getScoreColor = (score: number) => {
@@ -80,11 +119,13 @@ const InterviewerTab: React.FC = () => {
     return 'destructive';
   };
 
-  const stats = {
-    total: allCandidates.length,
-    completed: allCandidates.filter(c => c.status === 'completed').length,
-    avgScore: allCandidates.reduce((acc, c) => acc + (c.score || 0), 0) / allCandidates.length,
-    highScorers: allCandidates.filter(c => (c.score || 0) >= 80).length
+  // Use real data if available, otherwise fallback to calculated stats
+  const displayStats = stats.totalCandidates > 0 ? stats : {
+    totalCandidates: allCandidates.length,
+    completedInterviews: allCandidates.filter(c => c.status === 'completed').length,
+    averageScore: allCandidates.reduce((acc, c) => acc + (c.score || 0), 0) / allCandidates.length,
+    inProgressInterviews: allCandidates.filter(c => c.status === 'in-progress').length,
+    pendingInterviews: allCandidates.filter(c => c.status === 'pending').length
   };
 
   return (
@@ -100,7 +141,7 @@ const InterviewerTab: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Candidates</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-2xl font-bold">{displayStats.totalCandidates}</p>
               </div>
               <Users className="w-8 h-8 text-primary opacity-60" />
             </div>
@@ -112,7 +153,7 @@ const InterviewerTab: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Completed</p>
-                <p className="text-2xl font-bold">{stats.completed}</p>
+                <p className="text-2xl font-bold">{displayStats.completedInterviews}</p>
               </div>
               <Clock className="w-8 h-8 text-success opacity-60" />
             </div>
@@ -124,7 +165,7 @@ const InterviewerTab: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Avg Score</p>
-                <p className="text-2xl font-bold">{stats.avgScore.toFixed(1)}</p>
+                <p className="text-2xl font-bold">{displayStats.averageScore.toFixed(1)}</p>
               </div>
               <TrendingUp className="w-8 h-8 text-warning opacity-60" />
             </div>
@@ -136,7 +177,7 @@ const InterviewerTab: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">High Scorers</p>
-                <p className="text-2xl font-bold">{stats.highScorers}</p>
+                <p className="text-2xl font-bold">{allCandidates.filter(c => (c.score || 0) >= 80).length}</p>
               </div>
               <Badge className="bg-success text-success-foreground">80+</Badge>
             </div>

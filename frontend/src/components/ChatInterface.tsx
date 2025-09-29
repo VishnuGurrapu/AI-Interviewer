@@ -4,14 +4,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, ArrowLeft } from 'lucide-react';
 import { addChatMessage, nextQuestion } from '@/store/slices/interviewSlice';
 
 interface Props {
   onStartInterview: () => void;
+  onGoBack?: () => void;
 }
 
-const ChatInterface: React.FC<Props> = ({ onStartInterview }) => {
+const ChatInterface: React.FC<Props> = ({ onStartInterview, onGoBack }) => {
   const dispatch = useDispatch();
   const { chatHistory, isCollectingInfo, isInterviewActive, currentCandidate } = useSelector(
     (state: RootState) => state.interview
@@ -163,11 +164,19 @@ const ChatInterface: React.FC<Props> = ({ onStartInterview }) => {
           </Button>
         </div>
         
-        {isCollectingInfo && currentCandidate?.name && currentCandidate?.email && currentCandidate?.phone && (
-          <div className="mt-3">
-            <Button onClick={onStartInterview} variant="gradient" className="w-full">
-              Start Interview
-            </Button>
+        {isCollectingInfo && (
+          <div className="mt-3 space-y-2">
+            {currentCandidate?.name && currentCandidate?.email && currentCandidate?.phone && (
+              <Button onClick={onStartInterview} variant="gradient" className="w-full">
+                Start Interview
+              </Button>
+            )}
+            {onGoBack && (
+              <Button onClick={onGoBack} variant="outline" className="w-full">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Upload Different Resume
+              </Button>
+            )}
           </div>
         )}
       </div>

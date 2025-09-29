@@ -7,19 +7,22 @@ import { useToast } from '@/hooks/use-toast';
 
 interface Props {
   onUpload: (file: File) => void;
+  disabled?: boolean;
 }
 
-const ResumeUpload: React.FC<Props> = ({ onUpload }) => {
+const ResumeUpload: React.FC<Props> = ({ onUpload, disabled = false }) => {
   const { toast } = useToast();
 
   const handleFileUpload = useCallback((file: File) => {
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (disabled) return;
+    
+    const allowedTypes = ['application/pdf'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
 
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Invalid file type",
-        description: "Please upload a PDF or DOCX file.",
+        description: "Please upload a PDF file only.",
         variant: "destructive",
       });
       return;
@@ -28,18 +31,14 @@ const ResumeUpload: React.FC<Props> = ({ onUpload }) => {
     if (file.size > maxSize) {
       toast({
         title: "File too large",
-        description: "Please upload a file smaller than 10MB.",
+        description: "Please upload a file smaller than 5MB.",
         variant: "destructive",
       });
       return;
     }
 
     onUpload(file);
-    toast({
-      title: "Resume uploaded successfully!",
-      description: "Your resume has been processed and information extracted.",
-    });
-  }, [onUpload, toast]);
+  }, [onUpload, toast, disabled]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -64,10 +63,12 @@ const ResumeUpload: React.FC<Props> = ({ onUpload }) => {
       transition={{ duration: 0.2 }}
     >
       <Card
-        className="p-8 border-2 border-dashed border-glass-border glass-panel-hover cursor-pointer"
-        onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
-        onClick={() => document.getElementById('resume-upload')?.click()}
+        className={`p-8 border-2 border-dashed border-glass-border ${
+          disabled ? 'opacity-50 cursor-not-allowed' : 'glass-panel-hover cursor-pointer'
+        }`}
+        onDrop={disabled ? undefined : handleDrop}
+        onDragOver={disabled ? undefined : (e) => e.preventDefault()}
+        onClick={disabled ? undefined : () => document.getElementById('resume-upload')?.click()}
       >
         <div className="text-center space-y-4">
           <motion.div
@@ -87,11 +88,11 @@ const ResumeUpload: React.FC<Props> = ({ onUpload }) => {
             </p>
             <p className="text-sm text-muted-foreground flex items-center justify-center gap-2">
               <FileText className="w-4 h-4" />
-              Supports PDF and DOCX files (max 10MB)
+              Supports PDF files only (max 5MB)
             </p>
           </div>
 
-          <Button variant="gradient" size="lg">
+          <Button variant="gradient" size="lg" disabled={disabled}>
             <Upload className="w-4 h-4 mr-2" />
             Choose File
           </Button>
@@ -99,9 +100,10 @@ const ResumeUpload: React.FC<Props> = ({ onUpload }) => {
           <input
             id="resume-upload"
             type="file"
-            accept=".pdf,.docx"
+            accept=".pdf"
             onChange={handleFileSelect}
             className="hidden"
+            disabled={disabled}
           />
         </div>
       </Card>
