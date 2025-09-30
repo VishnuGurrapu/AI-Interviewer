@@ -3,6 +3,7 @@ import Candidate from '../models/Candidate.js';
 import { extractDataFromResume } from '../utils/resumeParser.js';
 import { safeExtractResumeData } from '../utils/safePdfParser.js';
 import { robustExtractResumeData } from '../utils/robustPdfParser.js';
+import { extractResumeWithAI } from '../utils/aiResumeParser.js';
 
 // Upload resume and create/update candidate
 export const uploadResume = async (req, res) => {
@@ -25,30 +26,42 @@ export const uploadResume = async (req, res) => {
     }
 
     const filePath = req.file.path;
+    const candidateName = existingCandidate.name || 'Unknown Candidate';
     
-    // Extract data from resume using robust parser
-    console.log('[Resume Controller] Starting resume extraction...');
+    // Extract data from resume using AI-powered parser
+    console.log('[Resume Controller] Starting AI-powered resume extraction...');
+    console.log('[Resume Controller] Candidate name:', candidateName);
     let extractedData;
     
     try {
-      // Try the robust parser first (handles pdf-parse issues)
-      extractedData = await robustExtractResumeData(filePath);
-      console.log('[Resume Controller] ✅ Robust extraction result:', {
+      // Try AI-powered parser first (best accuracy)
+      extractedData = await extractResumeWithAI(filePath, candidateName);
+      console.log('[Resume Controller] ✅ AI extraction result:', {
         name: extractedData.name,
         email: extractedData.email,
         phone: extractedData.phone,
-        hasError: extractedData.parseError,
-        fromPDF: extractedData.extractedFromPDF
+        skills: extractedData.skills?.length || 0,
+        aiEnhanced: extractedData.aiEnhanced,
+        hasError: extractedData.parseError
       });
     } catch (error) {
-      console.log('[Resume Controller] ⚠️ Robust parser failed, trying safe parser...');
+      console.log('[Resume Controller] ⚠️ AI parser failed, trying robust parser...');
       try {
-        extractedData = await safeExtractResumeData(filePath);
-        console.log('[Resume Controller] Safe parser result:', extractedData);
-      } catch (safeError) {
-        console.log('[Resume Controller] ⚠️ Safe parser also failed, trying original parser...');
-        extractedData = await extractDataFromResume(filePath);
-        console.log('[Resume Controller] Original parser result:', extractedData);
+        extractedData = await robustExtractResumeData(filePath);
+        extractedData.name = candidateName; // Ensure name is from candidate record
+        console.log('[Resume Controller] Robust parser result:', extractedData);
+      } catch (robustError) {
+        console.log('[Resume Controller] ⚠️ Robust parser failed, trying safe parser...');
+        try {
+          extractedData = await safeExtractResumeData(filePath);
+          extractedData.name = candidateName;
+          console.log('[Resume Controller] Safe parser result:', extractedData);
+        } catch (safeError) {
+          console.log('[Resume Controller] ⚠️ All parsers failed, using basic extraction...');
+          extractedData = await extractDataFromResume(filePath);
+          extractedData.name = candidateName;
+          console.log('[Resume Controller] Basic parser result:', extractedData);
+        }
       }
     }
     

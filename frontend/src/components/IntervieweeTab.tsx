@@ -21,6 +21,7 @@ import ChatInterface from './ChatInterface';
 import ResumeUpload from './ResumeUpload';
 import TimerRing from './TimerRing';
 import ScoreCard from './ScoreCard';
+import NameInputDialog from './NameInputDialog';
 
 const IntervieweeTab: React.FC = () => {
   const dispatch = useDispatch();
@@ -43,9 +44,21 @@ const IntervieweeTab: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentCandidateId, setCurrentCandidateId] = useState<string | null>(null);
+  const [candidateName, setCandidateName] = useState<string | null>(null);
+  const [showNameDialog, setShowNameDialog] = useState(true);
+
+  const handleNameSubmit = (name: string) => {
+    console.log('[Frontend] Candidate name submitted:', name);
+    setCandidateName(name);
+    setCandidateInfo(prev => ({ ...prev, name }));
+    setShowNameDialog(false);
+    
+    // Show welcome message
+    dispatch(startInfoCollection());
+  };
 
   const handleGoBack = () => {
-    // Reset all states to go back to upload stage
+    // Reset all states to go back to name input
     setCandidateInfo({
       name: 'Unknown Candidate',
       email: `candidate${Date.now()}@example.com`,
@@ -53,12 +66,11 @@ const IntervieweeTab: React.FC = () => {
     });
     setCurrentCandidateId(null);
     setUploadError(null);
+    setCandidateName(null);
+    setShowNameDialog(true);
     
     // Reset interview state completely
     dispatch(resetInterview());
-    
-    // Start fresh with welcome message
-    dispatch(startInfoCollection());
   };
 
   const handleResumeUpload = async (file: File) => {
@@ -66,9 +78,9 @@ const IntervieweeTab: React.FC = () => {
     setUploadError(null);
     
     try {
-      // Step 1: Create a temporary candidate first
+      // Step 1: Create candidate with the provided name
       const tempCandidateData = {
-        name: 'Unknown Candidate',
+        name: candidateName || 'Unknown Candidate',
         email: `candidate${Date.now()}@example.com`,
         phone: 'Not provided',
         status: 'pending' as const
@@ -318,7 +330,9 @@ const IntervieweeTab: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 p-0 min-h-0">
-              {!currentCandidate ? (
+              {showNameDialog ? (
+                <NameInputDialog onSubmit={handleNameSubmit} isLoading={false} />
+              ) : !currentCandidate ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -328,15 +342,17 @@ const IntervieweeTab: React.FC = () => {
                       <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mb-4"></div>
                       <h3 className="text-xl font-semibold mb-2">Processing Resume</h3>
                       <p className="text-muted-foreground mb-6">
-                        Please wait while we extract information from your resume...
+                        Please wait while we extract information from your resume using AI...
                       </p>
                     </>
                   ) : (
                     <>
                       <Upload className="w-16 h-16 text-muted-foreground mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">Upload Your Resume</h3>
+                      <h3 className="text-xl font-semibold mb-2">
+                        Welcome, {candidateName}!
+                      </h3>
                       <p className="text-muted-foreground mb-6">
-                        Start by uploading your resume to begin the interview process
+                        Upload your resume to continue with the interview process
                       </p>
                       {uploadError && (
                         <div className="flex items-center gap-2 text-destructive mb-4 p-3 bg-destructive/10 rounded-lg">
