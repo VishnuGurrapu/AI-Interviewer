@@ -26,7 +26,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://localhost:5173'], // Allow both dev server ports
+  origin: ['http://localhost:8080', 'http://localhost:8081', 'http://localhost:5173'], // Allow all dev server ports
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

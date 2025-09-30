@@ -5,7 +5,7 @@ import { RootState } from '@/store/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, Bot, User, ArrowLeft } from 'lucide-react';
-import { addChatMessage, nextQuestion } from '@/store/slices/interviewSlice';
+import { addChatMessage, nextQuestion, updateCandidateInfo } from '@/store/slices/interviewSlice';
 
 interface Props {
   onStartInterview: () => void;
@@ -45,19 +45,24 @@ const ChatInterface: React.FC<Props> = ({ onStartInterview, onGoBack }) => {
       setIsTyping(false);
       
       if (isCollectingInfo) {
-        if (!currentCandidate?.name) {
-          dispatch(addChatMessage({
-            text: "Thanks! Now, what's your email address?",
-            sender: 'bot'
-          }));
-        } else if (!currentCandidate?.email) {
+        // Handle info collection responses
+        const hasEmail = currentCandidate?.email && !currentCandidate.email.includes('@example.com');
+        const hasPhone = currentCandidate?.phone && currentCandidate.phone !== 'Not provided';
+        
+        if (!hasEmail) {
+          // User just provided email
+          dispatch(updateCandidateInfo({ email: message }));
+          
           dispatch(addChatMessage({
             text: "Perfect! And your phone number?",
             sender: 'bot'
           }));
-        } else {
+        } else if (!hasPhone) {
+          // User just provided phone
+          dispatch(updateCandidateInfo({ phone: message }));
+          
           dispatch(addChatMessage({
-            text: "Excellent! I have all your information. Ready to start the interview?",
+            text: "Excellent! I have all your information. Click 'Start Interview' below when you're ready to begin.",
             sender: 'bot'
           }));
         }
@@ -71,6 +76,12 @@ const ChatInterface: React.FC<Props> = ({ onStartInterview, onGoBack }) => {
         setTimeout(() => {
           dispatch(nextQuestion());
         }, 2000);
+      } else {
+        // Bot is waiting for interview to start
+        dispatch(addChatMessage({
+          text: "I'm ready when you are! Please click the 'Start Interview' button below to begin your interview session.",
+          sender: 'bot'
+        }));
       }
     }, 1500);
   };
@@ -164,19 +175,32 @@ const ChatInterface: React.FC<Props> = ({ onStartInterview, onGoBack }) => {
           </Button>
         </div>
         
-        {isCollectingInfo && (
+        {!isInterviewActive && (
           <div className="mt-3 space-y-2">
-            {currentCandidate?.name && currentCandidate?.email && currentCandidate?.phone && (
-              <Button onClick={onStartInterview} variant="gradient" className="w-full">
-                Start Interview
-              </Button>
-            )}
-            {onGoBack && (
-              <Button onClick={onGoBack} variant="outline" className="w-full">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Upload Different Resume
-              </Button>
-            )}
+            {(() => {
+              const hasEmail = currentCandidate?.email && !currentCandidate.email.includes('@example.com');
+              const hasPhone = currentCandidate?.phone && currentCandidate.phone !== 'Not provided';
+              const canStartInterview = hasEmail && hasPhone;
+              
+              return (
+                <>
+                  <Button 
+                    onClick={onStartInterview} 
+                    variant="gradient" 
+                    className="w-full"
+                    disabled={!canStartInterview}
+                  >
+                    {canStartInterview ? 'Start Interview' : 'Complete Info First'}
+                  </Button>
+                  {onGoBack && (
+                    <Button onClick={onGoBack} variant="outline" className="w-full">
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      Upload Different Resume
+                    </Button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

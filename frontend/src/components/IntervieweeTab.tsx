@@ -136,7 +136,12 @@ const IntervieweeTab: React.FC = () => {
           }));
           
           dispatch(addChatMessage({
-            text: `I found: Name: ${extractedData.name}, Email: ${extractedData.email}, Phone: ${extractedData.phone}. Is this information correct?`,
+            text: `I found: Name: ${extractedData.name}, Email: ${extractedData.email}, Phone: ${extractedData.phone}.`,
+            sender: 'bot'
+          }));
+          
+          dispatch(addChatMessage({
+            text: `All set! Click "Start Interview" below when you're ready to begin.`,
             sender: 'bot'
           }));
         } else if (hasValidName || hasValidEmail || hasValidPhone) {
@@ -207,26 +212,40 @@ const IntervieweeTab: React.FC = () => {
           sender: 'bot'
         }));
 
-        // Generate AI-powered questions based on resume
-        const questionsResponse = await aiAPI.generateQuestions(currentCandidateId, 'Software Developer');
-        
+        // Generate AI-powered questions based on resume with timeout
         let aiQuestions = questions; // fallback to default questions
         
-        if (questionsResponse.data && questionsResponse.data.questions) {
-          // Convert AI questions to frontend format
-          aiQuestions = questionsResponse.data.questions.map((q, index) => ({
-            id: q.id || (index + 1).toString(),
-            text: q.text,
-            difficulty: q.difficulty as 'easy' | 'medium' | 'hard',
-            timeLimit: q.timeLimit
-          }));
-          console.log('✅ Generated AI questions:', aiQuestions);
+        try {
+          const questionsResponse = await Promise.race([
+            aiAPI.generateQuestions(currentCandidateId, 'Software Developer'),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Question generation timeout')), 10000)
+            )
+          ]) as Awaited<ReturnType<typeof aiAPI.generateQuestions>>;
           
-          dispatch(addChatMessage({
-            text: `Excellent! I've generated ${aiQuestions.length} personalized questions based on your background and skills.`,
-            sender: 'bot'
-          }));
-        } else {
+          if (questionsResponse && 'data' in questionsResponse && questionsResponse.data && questionsResponse.data.questions && questionsResponse.data.questions.length > 0) {
+            // Convert AI questions to frontend format
+            aiQuestions = questionsResponse.data.questions.map((q: any, index: number) => ({
+              id: q.id || (index + 1).toString(),
+              text: q.text,
+              difficulty: q.difficulty as 'easy' | 'medium' | 'hard',
+              timeLimit: q.timeLimit
+            }));
+            console.log('✅ Generated AI questions:', aiQuestions);
+            
+            dispatch(addChatMessage({
+              text: `Excellent! I've generated ${aiQuestions.length} personalized questions based on your background and skills.`,
+              sender: 'bot'
+            }));
+          } else {
+            console.log('⚠️ Using default questions as fallback (empty response)');
+            dispatch(addChatMessage({
+              text: `I'll use our standard interview questions for you today.`,
+              sender: 'bot'
+            }));
+          }
+        } catch (aiError) {
+          console.error('⚠️ AI question generation failed:', aiError);
           console.log('⚠️ Using default questions as fallback');
           dispatch(addChatMessage({
             text: `I'll use our standard interview questions for you today.`,
@@ -263,9 +282,9 @@ const IntervieweeTab: React.FC = () => {
         }, 2000);
         
       } catch (error) {
-        console.error('Failed to start interview:', error);
+        console.error('❌ Failed to start interview:', error);
         dispatch(addChatMessage({
-          text: `I'm sorry, there was an error starting the interview. Please try again.`,
+          text: `I'm sorry, there was an error starting the interview: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
           sender: 'bot'
         }));
       }

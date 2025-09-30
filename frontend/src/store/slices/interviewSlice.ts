@@ -94,12 +94,32 @@ const interviewSlice = createSlice({
     },
     nextQuestion: (state) => {
       if (state.currentQuestionIndex < state.questions.length - 1) {
+        // Advance to next question
         state.currentQuestionIndex += 1;
         state.timeRemaining = state.questions[state.currentQuestionIndex].timeLimit;
+
+        // Push the next question into chat as a bot message
+        const q = state.questions[state.currentQuestionIndex];
+        state.chatHistory.push({
+          id: Date.now().toString(),
+          text: q.text,
+          sender: 'bot',
+          timestamp: new Date().toISOString(),
+          questionId: q.id,
+        });
       } else {
+        // Interview completed
         state.isInterviewActive = false;
         state.finalScore = Math.floor(Math.random() * 40) + 60; // Demo score
         state.aiSummary = 'Great interview! You demonstrated strong communication skills and technical knowledge.';
+
+        // Inform user in chat
+        state.chatHistory.push({
+          id: Date.now().toString(),
+          text: 'That was the last question. Thanks for your responses! Calculating your results...',
+          sender: 'bot',
+          timestamp: new Date().toISOString(),
+        });
       }
     },
     completeInterview: (state, action: PayloadAction<{ score: number; aiSummary: string }>) => {
@@ -128,6 +148,14 @@ const interviewSlice = createSlice({
     setWelcomeBack: (state, action: PayloadAction<boolean>) => {
       state.showWelcomeBack = action.payload;
     },
+    updateCandidateInfo: (state, action: PayloadAction<Partial<Candidate>>) => {
+      if (state.currentCandidate) {
+        state.currentCandidate = {
+          ...state.currentCandidate,
+          ...action.payload
+        };
+      }
+    },
   },
 });
 
@@ -140,7 +168,8 @@ export const {
   completeInterview,
   updateTimeRemaining,
   resetInterview,
-  setWelcomeBack
+  setWelcomeBack,
+  updateCandidateInfo
 } = interviewSlice.actions;
 
 export default interviewSlice.reducer;
