@@ -2,7 +2,7 @@
  * API Service for communicating with the backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 // Types
 export interface ApiResponse<T> {
@@ -116,6 +116,11 @@ export const resumeAPI = {
       const response = await fetch(`${API_BASE_URL}/resumes`, {
         method: 'POST',
         body: formData,
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          // Don't set Content-Type header, let the browser set it with the correct boundary for FormData
+        },
       });
 
       if (!response.ok) {

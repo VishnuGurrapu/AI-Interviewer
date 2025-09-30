@@ -29,10 +29,10 @@ const IntervieweeTab: React.FC = () => {
     isCollectingInfo, 
     isInterviewActive,
     currentQuestionIndex,
-    questions,
+    questions = [],
     finalScore,
     aiSummary,
-    chatHistory
+    chatHistory = []
   } = useSelector((state: RootState) => state.interview);
 
   const [candidateInfo, setCandidateInfo] = useState({
@@ -66,8 +66,27 @@ const IntervieweeTab: React.FC = () => {
     setUploadError(null);
     
     try {
-      // Upload resume to backend
-      const response = await resumeAPI.upload(file);
+      // Step 1: Create a temporary candidate first
+      const tempCandidateData = {
+        name: 'Unknown Candidate',
+        email: `candidate${Date.now()}@example.com`,
+        phone: 'Not provided',
+        status: 'pending' as const
+      };
+      
+      const candidateResponse = await candidateAPI.create(tempCandidateData);
+      
+      if (candidateResponse.error || !candidateResponse.data) {
+        throw new Error(candidateResponse.error || 'Failed to create candidate');
+      }
+      
+      const createdCandidateId = candidateResponse.data._id;
+      if (!createdCandidateId) {
+        throw new Error('No candidate ID returned');
+      }
+      
+      // Step 2: Upload resume with candidateId
+      const response = await resumeAPI.upload(file, createdCandidateId);
       
       if (response.error) {
         throw new Error(response.error);
@@ -162,6 +181,12 @@ const IntervieweeTab: React.FC = () => {
       dispatch(addChatMessage({
         text: `I'm sorry, there was an error processing your resume. Please try uploading again or enter your information manually.`,
         sender: 'bot'
+      }));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleStartInterview = async () => {
     if (candidateInfo.name && candidateInfo.email && candidateInfo.phone && currentCandidateId) {
       try {

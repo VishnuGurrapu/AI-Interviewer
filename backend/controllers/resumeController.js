@@ -7,8 +7,21 @@ import { robustExtractResumeData } from '../utils/robustPdfParser.js';
 // Upload resume and create/update candidate
 export const uploadResume = async (req, res) => {
   try {
+    // Validate file upload
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Validate candidateId
+    const { candidateId } = req.body;
+    if (!candidateId) {
+      return res.status(400).json({ message: 'candidateId is required in the request body' });
+    }
+
+    // Validate if candidate exists
+    const existingCandidate = await Candidate.findById(candidateId);
+    if (!existingCandidate) {
+      return res.status(404).json({ message: 'Candidate not found' });
     }
 
     const filePath = req.file.path;
@@ -39,35 +52,47 @@ export const uploadResume = async (req, res) => {
       }
     }
     
-    // Create or update candidate with extracted data
-    let candidate;
-    const { candidateId } = req.body;
-    
-    if (candidateId) {
-      // Update existing candidate
+    // Update candidate with extracted data if available
+    let candidate = existingCandidate;
+    if (extractedData) {
       candidate = await Candidate.findByIdAndUpdate(
         candidateId,
         {
-          name: extractedData.name,
-          email: extractedData.email,
-          phone: extractedData.phone,
+          $set: {
+            ...(extractedData.name && { name: extractedData.name }),
+            ...(extractedData.email && { email: extractedData.email }),
+            ...(extractedData.phone && { phone: extractedData.phone })
+          }
         },
         { new: true }
       );
-    } else {
-      // Create new candidate
-      candidate = new Candidate({
-        name: extractedData.name,
-        email: extractedData.email,
-        phone: extractedData.phone,
-        status: 'pending'
+    }
+
+    // Check for existing resume
+    const existingResume = await Resume.findOne({ candidate: candidateId });
+    if (existingResume) {
+      // Update existing resume
+      const updatedResume = await Resume.findByIdAndUpdate(
+        existingResume._id,
+        {
+          fileUrl: filePath,
+          extractedData,
+          uploadedAt: new Date()
+        },
+        { new: true }
+      );
+      
+      return res.status(200).json({
+        message: 'Resume updated successfully',
+        candidate,
+        resume: updatedResume,
+        extractedData
       });
-      await candidate.save();
     }
     
-    // Save resume data
+    // Create new resume
     const resume = new Resume({
-      candidate: candidate._id,
+      candidate: candidateId,
       fileUrl: filePath,
       extractedData,
     });
@@ -75,6 +100,7 @@ export const uploadResume = async (req, res) => {
     const savedResume = await resume.save();
     
     res.status(201).json({
+      message: 'Resume uploaded successfully',
       candidate,
       resume: savedResume,
       extractedData
